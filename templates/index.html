@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SilenceCutter - Recorte de Silencios en Videos</title>
+    <meta name="description" content="Herramienta para recortar automáticamente silencios largos en videos, perfecta para editar clases grabadas y presentaciones.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">✂️</span>
+                <h1>SilenceCutter</h1>
+            </div>
+            <p class="tagline">Elimina silencios largos de tus videos automáticamente</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Upload Section -->
+            <section class="upload-section" id="uploadSection">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                    </div>
+                    <h2>Arrastra tu video aquí</h2>
+                    <p>o haz clic para seleccionar un archivo</p>
+                    <p class="supported-formats">Formatos: MP4, AVI, MOV, MKV, WebM</p>
+                    <input type="file" id="videoInput" accept=".mp4,.avi,.mov,.mkv,.webm,.wmv" hidden>
+                </div>
+
+                <!-- File Preview -->
+                <div class="file-preview hidden" id="filePreview">
+                    <div class="file-info">
+                        <span class="file-icon">🎬</span>
+                        <div class="file-details">
+                            <span class="file-name" id="fileName"></span>
+                            <span class="file-size" id="fileSize"></span>
+                        </div>
+                        <button class="btn-remove" id="removeFile" title="Quitar archivo">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section class="settings-section" id="settingsSection">
+                <h3>⚙️ Configuración</h3>
+                
+                <div class="setting-group">
+                    <label for="maxSilence">
+                        <span class="setting-label">Duración máxima de silencio</span>
+                        <span class="setting-value" id="maxSilenceValue">3.0s</span>
+                    </label>
+                    <input type="range" id="maxSilence" min="0.5" max="10" step="0.5" value="3">
+                    <p class="setting-description">Silencios mayores a este valor serán recortados</p>
+                </div>
+
+                <div class="setting-group">
+                    <label for="sensitivity">
+                        <span class="setting-label">Sensibilidad de detección</span>
+                        <span class="setting-value" id="sensitivityValue">5</span>
+                    </label>
+                    <input type="range" id="sensitivity" min="1" max="10" step="1" value="5">
+                    <p class="setting-description">Mayor sensibilidad = detecta silencios más suaves</p>
+                </div>
+            </section>
+
+            <!-- Process Button -->
+            <button class="btn-process" id="processBtn" disabled>
+                <span class="btn-text">Procesar Video</span>
+                <span class="btn-icon">🚀</span>
+            </button>
+
+            <!-- Progress Section -->
+            <section class="progress-section hidden" id="progressSection">
+                <div class="progress-container">
+                    <div class="progress-spinner"></div>
+                    <h3 id="progressTitle">Procesando video...</h3>
+                    <p id="progressMessage">Por favor espera, esto puede tomar unos minutos</p>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section hidden" id="resultsSection">
+                <div class="results-header">
+                    <span class="success-icon">✅</span>
+                    <h3>¡Video procesado exitosamente!</h3>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-icon">⏱️</span>
+                        <span class="stat-label">Duración Original</span>
+                        <span class="stat-value" id="originalDuration">--</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">✂️</span>
+                        <span class="stat-label">Nueva Duración</span>
+                        <span class="stat-value" id="newDuration">--</span>
+                    </div>
+                    <div class="stat-card highlight">
+                        <span class="stat-icon">💾</span>
+                        <span class="stat-label">Tiempo Ahorrado</span>
+                        <span class="stat-value" id="timeSaved">--</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">📊</span>
+                        <span class="stat-label">Reducción</span>
+                        <span class="stat-value" id="percentageSaved">--</span>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn-download" id="downloadBtn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Descargar Video
+                    </button>
+                    <button class="btn-new" id="newVideoBtn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Procesar Otro Video
+                    </button>
+                </div>
+            </section>
+
+            <!-- Error Section -->
+            <section class="error-section hidden" id="errorSection">
+                <div class="error-container">
+                    <span class="error-icon">❌</span>
+                    <h3>Error al procesar</h3>
+                    <p id="errorMessage"></p>
+                    <button class="btn-retry" id="retryBtn">Intentar de nuevo</button>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Desarrollado para edición rápida de videos educativos 📚</p>
+            <p class="version">v1.0 | Procesamiento 100% local</p>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
