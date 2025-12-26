@@ -9,44 +9,44 @@
     --color-primary-light: #818cf8;
     --color-primary-dark: #4f46e5;
     --color-primary-glow: rgba(99, 102, 241, 0.4);
-    
+
     /* Colores Secundarios */
     --color-secondary: #ec4899;
     --color-secondary-light: #f472b6;
-    
+
     /* Colores de Acento */
     --color-accent: #22d3ee;
     --color-success: #10b981;
     --color-warning: #f59e0b;
     --color-error: #ef4444;
-    
+
     /* Fondos */
     --bg-base: #0f0f1a;
     --bg-surface: #1a1a2e;
     --bg-elevated: #252542;
     --bg-card: rgba(37, 37, 66, 0.7);
     --bg-glass: rgba(26, 26, 46, 0.8);
-    
+
     /* Textos */
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
     --text-muted: #64748b;
-    
+
     /* Bordes */
     --border-color: rgba(99, 102, 241, 0.2);
     --border-glow: rgba(99, 102, 241, 0.5);
-    
+
     /* Gradientes */
     --gradient-primary: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
     --gradient-surface: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-base) 100%);
     --gradient-glow: radial-gradient(ellipse at center, var(--color-primary-glow) 0%, transparent 70%);
-    
+
     /* Sombras */
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
     --shadow-glow: 0 0 40px var(--color-primary-glow);
-    
+
     /* Espaciado */
     --space-xs: 0.25rem;
     --space-sm: 0.5rem;
@@ -54,14 +54,14 @@
     --space-lg: 1.5rem;
     --space-xl: 2rem;
     --space-2xl: 3rem;
-    
+
     /* Bordes Redondeados */
     --radius-sm: 8px;
     --radius-md: 12px;
     --radius-lg: 16px;
     --radius-xl: 24px;
     --radius-full: 9999px;
-    
+
     /* Transiciones */
     --transition-fast: 150ms ease;
     --transition-normal: 250ms ease;
@@ -69,7 +69,9 @@
 }
 
 /* Reset y Base */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
@@ -104,8 +106,13 @@ body::before {
 }
 
 @keyframes rotateBackground {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* Container Principal */
@@ -140,9 +147,19 @@ body::before {
 }
 
 @keyframes scissorSnip {
-    0%, 100% { transform: rotate(0deg); }
-    25% { transform: rotate(-10deg); }
-    75% { transform: rotate(10deg); }
+
+    0%,
+    100% {
+        transform: rotate(0deg);
+    }
+
+    25% {
+        transform: rotate(-10deg);
+    }
+
+    75% {
+        transform: rotate(10deg);
+    }
 }
 
 .logo h1 {
@@ -407,9 +424,133 @@ input[type="range"]::-moz-range-thumb {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--space-lg);
+    gap: var(--space-md);
 }
 
+.progress-container h3 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-bottom: var(--space-sm);
+}
+
+.progress-container p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+/* Progress Bar */
+.progress-bar-container {
+    width: 100%;
+    height: 12px;
+    background: var(--bg-base);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--gradient-primary);
+    border-radius: var(--radius-full);
+    transition: width 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg,
+            transparent 0%,
+            rgba(255, 255, 255, 0.3) 50%,
+            transparent 100%);
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+.progress-percent {
+    font-size: 2rem;
+    font-weight: 700;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Progress Stages */
+.progress-stages {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: var(--space-lg);
+    padding-top: var(--space-lg);
+    border-top: 1px solid var(--border-color);
+}
+
+.stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+    opacity: 0.4;
+    transition: all var(--transition-normal);
+}
+
+.stage.active {
+    opacity: 1;
+}
+
+.stage.completed {
+    opacity: 1;
+}
+
+.stage.completed .stage-icon {
+    animation: pulse 0.5s ease;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.2);
+    }
+}
+
+.stage-icon {
+    font-size: 1.5rem;
+}
+
+.stage-name {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+.stage.active .stage-name {
+    color: var(--color-primary-light);
+    font-weight: 600;
+}
+
+/* Spinner (backup) */
 .progress-spinner {
     width: 60px;
     height: 60px;
@@ -420,16 +561,9 @@ input[type="range"]::-moz-range-thumb {
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-.progress-container h3 {
-    font-size: 1.3rem;
-    font-weight: 600;
-}
-
-.progress-container p {
-    color: var(--text-secondary);
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* ==========================================================================
@@ -449,6 +583,7 @@ input[type="range"]::-moz-range-thumb {
         opacity: 0;
         transform: translateY(10px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -469,8 +604,15 @@ input[type="range"]::-moz-range-thumb {
 }
 
 @keyframes bounce {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.2); }
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.2);
+    }
 }
 
 .results-header h3 {
@@ -647,31 +789,557 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* ==========================================================================
+   Download Options (v2)
+   ========================================================================== */
+.download-options {
+    margin-top: var(--space-xl);
+    padding-top: var(--space-xl);
+    border-top: 1px solid var(--border-color);
+}
+
+.download-header {
+    text-align: center;
+    margin-bottom: var(--space-lg);
+}
+
+.download-header h4 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: var(--space-xs);
+}
+
+.download-info {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.download-buttons {
+    display: flex;
+    gap: var(--space-md);
+    margin-bottom: var(--space-xl);
+}
+
+.download-buttons.single {
+    justify-content: center;
+}
+
+.btn-download-main,
+.btn-download-alt {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-lg);
+    border: none;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition-normal);
+}
+
+.btn-download-main {
+    background: var(--gradient-primary);
+    color: white;
+}
+
+.btn-download-main:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg), var(--shadow-glow);
+}
+
+.btn-download-alt {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-download-alt:hover {
+    border-color: var(--color-primary);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.btn-download-main .btn-icon,
+.btn-download-alt .btn-icon {
+    font-size: 1.5rem;
+}
+
+.btn-download-main .btn-text,
+.btn-download-alt .btn-text {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.btn-download-main .btn-desc,
+.btn-download-alt .btn-desc {
+    font-size: 0.75rem;
+    opacity: 0.8;
+}
+
+/* Parts Section */
+.parts-section {
+    background: var(--bg-elevated);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    border: 1px solid var(--border-color);
+}
+
+.parts-section h5 {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-md);
+}
+
+.parts-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.part-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-surface);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+}
+
+.part-item:hover {
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.part-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.part-name {
+    font-weight: 500;
+}
+
+.part-duration {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.btn-part-download {
+    padding: var(--space-xs) var(--space-md);
+    background: transparent;
+    color: var(--color-primary-light);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.btn-part-download:hover {
+    background: var(--color-primary);
+    color: white;
+}
+
+/* New Video Container */
+.new-video-container {
+    margin-top: var(--space-xl);
+    text-align: center;
+}
+
+/* Split Info in Upload */
+.split-info {
+    font-size: 0.8rem;
+    color: var(--color-primary-light);
+    margin-top: var(--space-sm);
+    opacity: 0.9;
+}
+
+/* ==========================================================================
+   Mode Switch
+   ========================================================================== */
+.mode-switch {
+    display: flex;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-xl);
+    background: var(--bg-elevated);
+    padding: var(--space-xs);
+    border-radius: var(--radius-lg);
+}
+
+.mode-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    padding: var(--space-md);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+}
+
+.mode-btn:hover {
+    color: var(--text-primary);
+}
+
+.mode-btn.active {
+    background: var(--gradient-primary);
+    color: white;
+}
+
+.mode-icon {
+    font-size: 1.2rem;
+}
+
+/* ==========================================================================
+   Resume Banner
+   ========================================================================== */
+.resume-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-md) var(--space-lg);
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid var(--color-warning);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-xl);
+}
+
+.resume-content {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.resume-icon {
+    font-size: 1.5rem;
+}
+
+.resume-info {
+    color: var(--text-primary);
+}
+
+.resume-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.btn-resume {
+    padding: var(--space-sm) var(--space-md);
+    background: var(--color-warning);
+    color: black;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-dismiss {
+    padding: var(--space-sm) var(--space-md);
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+/* ==========================================================================
+   Batch Upload
+   ========================================================================== */
+.batch-upload .upload-options {
+    display: flex;
+    gap: var(--space-md);
+    margin-top: var(--space-lg);
+}
+
+.btn-select-files,
+.btn-select-folder {
+    padding: var(--space-md) var(--space-lg);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.btn-select-files:hover,
+.btn-select-folder:hover {
+    border-color: var(--color-primary);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+/* Batch Files Container */
+.batch-files-container {
+    background: var(--bg-card);
+    border-radius: var(--radius-xl);
+    padding: var(--space-lg);
+    border: 1px solid var(--border-color);
+}
+
+.batch-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-md);
+    padding-bottom: var(--space-md);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.batch-count {
+    font-weight: 600;
+    color: var(--color-primary-light);
+}
+
+.batch-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.btn-select-all,
+.btn-clear {
+    padding: var(--space-xs) var(--space-md);
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.btn-select-all:hover,
+.btn-clear:hover {
+    color: var(--text-primary);
+    border-color: var(--color-primary);
+}
+
+/* Batch Files List */
+.batch-files-list {
+    max-height: 300px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.batch-file-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-surface);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+}
+
+.batch-file-item:hover {
+    background: var(--bg-elevated);
+}
+
+.batch-file-item.selected {
+    border-left: 3px solid var(--color-primary);
+}
+
+.batch-file-item.completed {
+    opacity: 0.7;
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.batch-file-item.failed {
+    background: rgba(239, 68, 68, 0.1);
+    border-left-color: var(--color-error);
+}
+
+.batch-file-item.processing {
+    background: rgba(99, 102, 241, 0.1);
+    animation: pulse-bg 1.5s infinite;
+}
+
+@keyframes pulse-bg {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Checkbox */
+.file-checkbox {
+    position: relative;
+    cursor: pointer;
+}
+
+.file-checkbox input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.checkmark {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    background: var(--bg-base);
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    transition: all var(--transition-fast);
+}
+
+.file-checkbox input:checked~.checkmark {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.file-checkbox input:checked~.checkmark::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 12px;
+}
+
+.batch-file-item .file-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.batch-file-item .file-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 300px;
+}
+
+.batch-file-item .file-size {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.file-status {
+    font-size: 1.2rem;
+}
+
+/* Batch Progress Info */
+.batch-progress-info {
+    font-size: 0.9rem;
+    color: var(--color-primary-light);
+    margin-top: var(--space-sm);
+}
+
+/* Batch Results */
+.batch-results {
+    margin-top: var(--space-xl);
+}
+
+.batch-summary {
+    display: flex;
+    gap: var(--space-lg);
+    justify-content: center;
+    margin-bottom: var(--space-lg);
+    font-weight: 600;
+}
+
+.batch-summary .success {
+    color: var(--color-success);
+}
+
+.batch-summary .failed {
+    color: var(--color-error);
+}
+
+.batch-results-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.result-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-elevated);
+    border-radius: var(--radius-md);
+}
+
+.result-name {
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 250px;
+}
+
+.result-actions button {
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--color-primary);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: white;
+    cursor: pointer;
+}
+
+/* ==========================================================================
    Responsive
    ========================================================================== */
 @media (max-width: 600px) {
     .app-container {
         padding: var(--space-md);
     }
-    
+
     .logo h1 {
         font-size: 2rem;
     }
-    
+
     .upload-area {
         padding: var(--space-xl);
     }
-    
+
     .stats-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .action-buttons {
         flex-direction: column;
     }
-    
+
     .btn-download,
     .btn-new {
         width: 100%;
+    }
+
+    .mode-switch {
+        flex-direction: column;
+    }
+
+    .batch-upload .upload-options {
+        flex-direction: column;
+    }
+
+    .resume-banner {
+        flex-direction: column;
+        gap: var(--space-md);
+        text-align: center;
+    }
+
+    .batch-file-item .file-name {
+        max-width: 150px;
     }
 }

@@ -1,31 +1,86 @@
 /**
- * SilenceCutter - JavaScript Principal
- * ====================================
- * Maneja la interacción del usuario con la aplicación de recorte de silencios
+ * SilenceCutter v3 - Procesamiento por Lotes
+ * ==========================================
+ * - Selección múltiple de archivos o carpeta
+ * - Procesamiento en cola uno a uno
+ * - Guardado de estado para resumir
  */
 
 // =============================================================================
 // Estado de la Aplicación
 // =============================================================================
 const state = {
-    selectedFile: null,
-    downloadId: null,
-    downloadFilename: null,
-    isProcessing: false
+    mode: 'single', // 'single' o 'batch'
+    selectedFiles: [],
+    batchId: null,
+    currentFileIndex: 0,
+    results: [],
+    isProcessing: false,
+    settings: {
+        maxSilence: 3.0,
+        sensitivity: 5
+    }
 };
+
+// Persistencia en localStorage
+const STORAGE_KEY = 'silencecutter_batch_state';
+
+function saveToLocalStorage() {
+    const saveState = {
+        batchId: state.batchId,
+        currentFileIndex: state.currentFileIndex,
+        results: state.results,
+        settings: state.settings,
+        files: state.selectedFiles.map(f => ({
+            name: f.name,
+            size: f.size,
+            status: f.status || 'pending'
+        })),
+        savedAt: Date.now()
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(saveState));
+}
+
+function loadFromLocalStorage() {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+        try {
+            return JSON.parse(saved);
+        } catch {
+            return null;
+        }
+    }
+    return null;
+}
+
+function clearLocalStorage() {
+    localStorage.removeItem(STORAGE_KEY);
+}
 
 // =============================================================================
 // Elementos del DOM
 // =============================================================================
 const elements = {
+    // Modo
+    modeSwitch: document.getElementById('modeSwitch'),
+    singleMode: document.getElementById('singleMode'),
+    batchMode: document.getElementById('batchMode'),
+
     // Upload
     uploadArea: document.getElementById('uploadArea'),
-    uploadSection: document.getElementById('uploadSection'),
     videoInput: document.getElementById('videoInput'),
+    folderInput: document.getElementById('folderInput'),
     filePreview: document.getElementById('filePreview'),
     fileName: document.getElementById('fileName'),
     fileSize: document.getElementById('fileSize'),
     removeFile: document.getElementById('removeFile'),
+
+    // Batch
+    batchUploadArea: document.getElementById('batchUploadArea'),
+    batchFilesList: document.getElementById('batchFilesList'),
+    batchCount: document.getElementById('batchCount'),
+    selectAllBtn: document.getElementById('selectAllBtn'),
+    clearSelectionBtn: document.getElementById('clearSelectionBtn'),
 
     // Settings
     maxSilence: document.getElementById('maxSilence'),
@@ -33,20 +88,35 @@ const elements = {
     sensitivity: document.getElementById('sensitivity'),
     sensitivityValue: document.getElementById('sensitivityValue'),
 
-    // Buttons
+    // Actions
     processBtn: document.getElementById('processBtn'),
-    downloadBtn: document.getElementById('downloadBtn'),
-    newVideoBtn: document.getElementById('newVideoBtn'),
-    retryBtn: document.getElementById('retryBtn'),
 
-    // Sections
-    settingsSection: document.getElementById('settingsSection'),
+    // Progress
     progressSection: document.getElementById('progressSection'),
     progressTitle: document.getElementById('progressTitle'),
     progressMessage: document.getElementById('progressMessage'),
+    progressBar: document.getElementById('progressBar'),
+    progressPercent: document.getElementById('progressPercent'),
+    batchProgressInfo: document.getElementById('batchProgressInfo'),
+
+    // Results
     resultsSection: document.getElementById('resultsSection'),
+    downloadOptions: document.getElementById('downloadOptions'),
+    batchResults: document.getElementById('batchResults'),
+
+    // Error
     errorSection: document.getElementById('errorSection'),
     errorMessage: document.getElementById('errorMessage'),
+    retryBtn: document.getElementById('retryBtn'),
+
+    // Resume
+    resumeBanner: document.getElementById('resumeBanner'),
+    resumeInfo: document.getElementById('resumeInfo'),
+    resumeBtn: document.getElementById('resumeBtn'),
+    dismissResumeBtn: document.getElementById('dismissResumeBtn'),
+
+    // New
+    newVideoBtn: document.getElementById('newVideoBtn'),
 
     // Stats
     originalDuration: document.getElementById('originalDuration'),
@@ -59,9 +129,6 @@ const elements = {
 // Utilidades
 // =============================================================================
 
-/**
- * Formatea bytes a una cadena legible
- */
 function formatBytes(bytes) {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -70,255 +137,549 @@ function formatBytes(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-/**
- * Formatea segundos a formato mm:ss o hh:mm:ss
- */
 function formatDuration(seconds) {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
-
-    if (hrs > 0) {
-        return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
+    if (hrs > 0) return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-/**
- * Muestra una sección y oculta las demás
- */
 function showSection(section) {
-    const sections = ['progressSection', 'resultsSection', 'errorSection'];
-    sections.forEach(s => {
-        elements[s].classList.add('hidden');
+    ['progressSection', 'resultsSection', 'errorSection'].forEach(s => {
+        if (elements[s]) elements[s].classList.add('hidden');
     });
-    if (section) {
-        elements[section].classList.remove('hidden');
-    }
+    if (section && elements[section]) elements[section].classList.remove('hidden');
 }
 
-/**
- * Resetea la aplicación al estado inicial
- */
-function resetApp() {
-    state.selectedFile = null;
-    state.downloadId = null;
-    state.downloadFilename = null;
-    state.isProcessing = false;
+function updateProgressBar(percent, message, stage) {
+    if (elements.progressBar) elements.progressBar.style.width = `${percent}%`;
+    if (elements.progressPercent) elements.progressPercent.textContent = `${Math.round(percent)}%`;
+    if (elements.progressMessage) elements.progressMessage.textContent = message;
+}
 
-    elements.uploadArea.classList.remove('hidden');
-    elements.filePreview.classList.add('hidden');
-    elements.processBtn.disabled = true;
-    showSection(null);
+function isValidVideo(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    return ['mp4', 'avi', 'mov', 'mkv', 'webm', 'wmv'].includes(ext);
 }
 
 // =============================================================================
-// Manejo de Archivos
+// Modo Single/Batch
 // =============================================================================
 
-/**
- * Maneja la selección de un archivo
- */
-function handleFileSelect(file) {
-    if (!file) return;
+function switchMode(mode) {
+    state.mode = mode;
 
-    // Verificar tipo de archivo
-    const validTypes = ['video/mp4', 'video/avi', 'video/quicktime', 'video/x-matroska', 'video/webm', 'video/x-ms-wmv'];
-    const validExtensions = ['mp4', 'avi', 'mov', 'mkv', 'webm', 'wmv'];
-    const extension = file.name.split('.').pop().toLowerCase();
-
-    if (!validTypes.includes(file.type) && !validExtensions.includes(extension)) {
-        showError('Formato de archivo no válido. Por favor usa: MP4, AVI, MOV, MKV, WebM');
-        return;
-    }
-
-    // Verificar tamaño (500MB máximo)
-    if (file.size > 500 * 1024 * 1024) {
-        showError('El archivo es demasiado grande. Máximo permitido: 500MB');
-        return;
-    }
-
-    state.selectedFile = file;
-
-    // Actualizar UI
-    elements.uploadArea.classList.add('hidden');
-    elements.filePreview.classList.remove('hidden');
-    elements.fileName.textContent = file.name;
-    elements.fileSize.textContent = formatBytes(file.size);
-    elements.processBtn.disabled = false;
-    showSection(null);
-}
-
-/**
- * Muestra un mensaje de error
- */
-function showError(message) {
-    elements.errorMessage.textContent = message;
-    showSection('errorSection');
-}
-
-// =============================================================================
-// Drag & Drop
-// =============================================================================
-
-elements.uploadArea.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    elements.uploadArea.classList.add('drag-over');
-});
-
-elements.uploadArea.addEventListener('dragleave', (e) => {
-    e.preventDefault();
-    elements.uploadArea.classList.remove('drag-over');
-});
-
-elements.uploadArea.addEventListener('drop', (e) => {
-    e.preventDefault();
-    elements.uploadArea.classList.remove('drag-over');
-
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-        handleFileSelect(files[0]);
-    }
-});
-
-elements.uploadArea.addEventListener('click', () => {
-    elements.videoInput.click();
-});
-
-elements.videoInput.addEventListener('change', (e) => {
-    if (e.target.files.length > 0) {
-        handleFileSelect(e.target.files[0]);
-    }
-});
-
-// =============================================================================
-// Controles de Configuración
-// =============================================================================
-
-elements.maxSilence.addEventListener('input', (e) => {
-    elements.maxSilenceValue.textContent = `${e.target.value}s`;
-});
-
-elements.sensitivity.addEventListener('input', (e) => {
-    elements.sensitivityValue.textContent = e.target.value;
-});
-
-// =============================================================================
-// Botones de Acción
-// =============================================================================
-
-elements.removeFile.addEventListener('click', (e) => {
-    e.stopPropagation();
-    resetApp();
-});
-
-elements.processBtn.addEventListener('click', processVideo);
-
-elements.downloadBtn.addEventListener('click', downloadVideo);
-
-elements.newVideoBtn.addEventListener('click', () => {
-    // Limpiar archivo anterior del servidor
-    if (state.downloadId && state.downloadFilename) {
-        fetch(`/api/cleanup/${state.downloadId}/${state.downloadFilename}`, { method: 'DELETE' })
-            .catch(() => { }); // Ignorar errores de limpieza
-    }
-    resetApp();
-});
-
-elements.retryBtn.addEventListener('click', () => {
-    if (state.selectedFile) {
-        processVideo();
+    if (mode === 'single') {
+        elements.singleMode?.classList.add('active');
+        elements.batchMode?.classList.remove('active');
+        document.querySelector('.single-upload')?.classList.remove('hidden');
+        document.querySelector('.batch-upload')?.classList.add('hidden');
     } else {
-        resetApp();
+        elements.singleMode?.classList.remove('active');
+        elements.batchMode?.classList.add('active');
+        document.querySelector('.single-upload')?.classList.add('hidden');
+        document.querySelector('.batch-upload')?.classList.remove('hidden');
     }
-});
+
+    resetApp();
+}
 
 // =============================================================================
-// Procesamiento de Video
+// Manejo de Archivos - Single
 // =============================================================================
 
-async function processVideo() {
-    if (!state.selectedFile || state.isProcessing) return;
+function handleSingleFile(file) {
+    if (!file || !isValidVideo(file)) {
+        showError('Formato no válido');
+        return;
+    }
+
+    state.selectedFiles = [file];
+    elements.uploadArea?.classList.add('hidden');
+    elements.filePreview?.classList.remove('hidden');
+    if (elements.fileName) elements.fileName.textContent = file.name;
+    if (elements.fileSize) elements.fileSize.textContent = formatBytes(file.size);
+    if (elements.processBtn) elements.processBtn.disabled = false;
+}
+
+// =============================================================================
+// Manejo de Archivos - Batch
+// =============================================================================
+
+function handleBatchFiles(files) {
+    const validFiles = Array.from(files).filter(isValidVideo);
+
+    if (validFiles.length === 0) {
+        showError('No se encontraron videos válidos');
+        return;
+    }
+
+    // Agregar estado a cada archivo
+    state.selectedFiles = validFiles.map(f => {
+        f.status = 'pending';
+        f.selected = true;
+        return f;
+    });
+
+    renderBatchFilesList();
+    if (elements.processBtn) elements.processBtn.disabled = false;
+}
+
+function renderBatchFilesList() {
+    if (!elements.batchFilesList) return;
+
+    const selected = state.selectedFiles.filter(f => f.selected);
+    if (elements.batchCount) {
+        elements.batchCount.textContent = `${selected.length} videos seleccionados`;
+    }
+
+    elements.batchFilesList.innerHTML = '';
+
+    state.selectedFiles.forEach((file, index) => {
+        const item = document.createElement('div');
+        item.className = `batch-file-item ${file.selected ? 'selected' : ''} ${file.status || ''}`;
+        item.innerHTML = `
+            <label class="file-checkbox">
+                <input type="checkbox" ${file.selected ? 'checked' : ''} data-index="${index}">
+                <span class="checkmark"></span>
+            </label>
+            <div class="file-info">
+                <span class="file-name">${file.name}</span>
+                <span class="file-size">${formatBytes(file.size)}</span>
+            </div>
+            <span class="file-status">
+                ${file.status === 'completed' ? '✅' :
+                file.status === 'processing' ? '⏳' :
+                    file.status === 'failed' ? '❌' : '⏸️'}
+            </span>
+        `;
+
+        item.querySelector('input').addEventListener('change', (e) => {
+            state.selectedFiles[index].selected = e.target.checked;
+            renderBatchFilesList();
+        });
+
+        elements.batchFilesList.appendChild(item);
+    });
+
+    // Ocultar área de upload, mostrar lista
+    elements.batchUploadArea?.classList.add('hidden');
+    document.querySelector('.batch-files-container')?.classList.remove('hidden');
+}
+
+function selectAllFiles(select) {
+    state.selectedFiles.forEach(f => f.selected = select);
+    renderBatchFilesList();
+}
+
+// =============================================================================
+// Procesamiento - Single
+// =============================================================================
+
+async function processSingle() {
+    const file = state.selectedFiles[0];
+    if (!file) return;
 
     state.isProcessing = true;
     showSection('progressSection');
     elements.processBtn.disabled = true;
+    updateProgressBar(0, '📤 Subiendo...', 'uploading');
 
     const formData = new FormData();
-    formData.append('video', state.selectedFile);
-    formData.append('max_silence', elements.maxSilence.value);
-    formData.append('sensitivity', elements.sensitivity.value);
+    formData.append('video', file);
+    formData.append('max_silence', state.settings.maxSilence);
+    formData.append('sensitivity', state.settings.sensitivity);
 
     try {
-        elements.progressTitle.textContent = 'Subiendo video...';
-        elements.progressMessage.textContent = 'Preparando el archivo para procesar';
-
         const response = await fetch('/api/process', {
             method: 'POST',
             body: formData
         });
 
-        elements.progressTitle.textContent = 'Procesando video...';
-        elements.progressMessage.textContent = 'Detectando y recortando silencios, esto puede tomar unos minutos';
-
         const result = await response.json();
 
         if (response.ok && result.success) {
-            // Éxito
-            state.downloadId = result.download_id;
-            state.downloadFilename = result.filename;
-
-            // Actualizar estadísticas
-            elements.originalDuration.textContent = formatDuration(result.stats.original_duration);
-            elements.newDuration.textContent = formatDuration(result.stats.new_duration);
-            elements.timeSaved.textContent = formatDuration(result.stats.time_saved);
-            elements.percentageSaved.textContent = `${result.stats.percentage_saved}%`;
-
-            showSection('resultsSection');
+            state.results = [result];
+            showSingleResult(result);
         } else {
-            showError(result.error || 'Error desconocido al procesar el video');
+            showError(result.error || 'Error desconocido');
         }
     } catch (error) {
-        console.error('Error:', error);
-        showError(`Error de conexión: ${error.message}`);
+        showError(`Error: ${error.message}`);
     } finally {
         state.isProcessing = false;
         elements.processBtn.disabled = false;
     }
 }
 
-// =============================================================================
-// Descarga de Video
-// =============================================================================
+function showSingleResult(result) {
+    if (elements.originalDuration) elements.originalDuration.textContent = formatDuration(result.total_original_duration);
+    if (elements.newDuration) elements.newDuration.textContent = formatDuration(result.total_new_duration);
+    if (elements.timeSaved) elements.timeSaved.textContent = formatDuration(result.total_time_saved);
+    if (elements.percentageSaved) elements.percentageSaved.textContent = `${result.percentage_saved}%`;
 
-function downloadVideo() {
-    if (!state.downloadId || !state.downloadFilename) return;
-
-    const downloadUrl = `/api/download/${state.downloadId}/${state.downloadFilename}`;
-
-    // Crear enlace temporal para descargar
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = state.downloadFilename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    renderDownloadOptions(result);
+    showSection('resultsSection');
 }
+
+// =============================================================================
+// Procesamiento - Batch
+// =============================================================================
+
+async function processBatch() {
+    const filesToProcess = state.selectedFiles.filter(f => f.selected && f.status !== 'completed');
+
+    if (filesToProcess.length === 0) {
+        showError('No hay archivos para procesar');
+        return;
+    }
+
+    state.isProcessing = true;
+    showSection('progressSection');
+    elements.processBtn.disabled = true;
+
+    // Iniciar batch en el servidor
+    const filesInfo = filesToProcess.map(f => ({ name: f.name, size: f.size }));
+
+    try {
+        const startResponse = await fetch('/api/batch/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                files: filesInfo,
+                max_silence: state.settings.maxSilence,
+                sensitivity: state.settings.sensitivity
+            })
+        });
+
+        const startResult = await startResponse.json();
+        state.batchId = startResult.batch_id;
+
+        // Procesar cada archivo
+        for (let i = 0; i < state.selectedFiles.length; i++) {
+            const file = state.selectedFiles[i];
+
+            if (!file.selected || file.status === 'completed') continue;
+
+            file.status = 'processing';
+            renderBatchFilesList();
+
+            const batchPercent = (i / state.selectedFiles.length) * 100;
+            updateProgressBar(batchPercent, `⚙️ Procesando ${i + 1}/${state.selectedFiles.length}: ${file.name}`, 'processing');
+
+            if (elements.batchProgressInfo) {
+                elements.batchProgressInfo.textContent = `Archivo ${i + 1} de ${state.selectedFiles.length}`;
+                elements.batchProgressInfo.classList.remove('hidden');
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('video', file);
+
+                const response = await fetch(`/api/batch/${state.batchId}/process/${i}`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    file.status = 'completed';
+                    file.result = result.result;
+                    state.results.push(result.result);
+                } else {
+                    file.status = 'failed';
+                    file.error = result.error;
+                }
+            } catch (error) {
+                file.status = 'failed';
+                file.error = error.message;
+            }
+
+            renderBatchFilesList();
+            saveToLocalStorage();
+        }
+
+        // Mostrar resultados
+        showBatchResults();
+
+    } catch (error) {
+        showError(`Error iniciando batch: ${error.message}`);
+    } finally {
+        state.isProcessing = false;
+        elements.processBtn.disabled = false;
+    }
+}
+
+function showBatchResults() {
+    const completed = state.selectedFiles.filter(f => f.status === 'completed');
+    const failed = state.selectedFiles.filter(f => f.status === 'failed');
+
+    // Calcular totales
+    let totalOriginal = 0, totalNew = 0;
+    completed.forEach(f => {
+        if (f.result) {
+            totalOriginal += f.result.total_original_duration || 0;
+            totalNew += f.result.total_new_duration || 0;
+        }
+    });
+
+    if (elements.originalDuration) elements.originalDuration.textContent = formatDuration(totalOriginal);
+    if (elements.newDuration) elements.newDuration.textContent = formatDuration(totalNew);
+    if (elements.timeSaved) elements.timeSaved.textContent = formatDuration(totalOriginal - totalNew);
+    if (elements.percentageSaved) {
+        const pct = totalOriginal > 0 ? ((1 - totalNew / totalOriginal) * 100).toFixed(1) : 0;
+        elements.percentageSaved.textContent = `${pct}%`;
+    }
+
+    // Renderizar lista de resultados
+    if (elements.batchResults) {
+        elements.batchResults.innerHTML = `
+            <div class="batch-summary">
+                <span class="success">✅ ${completed.length} completados</span>
+                ${failed.length > 0 ? `<span class="failed">❌ ${failed.length} fallidos</span>` : ''}
+            </div>
+            <div class="batch-results-list">
+                ${completed.map(f => `
+                    <div class="result-item">
+                        <span class="result-name">${f.name}</span>
+                        <div class="result-actions">
+                            <button onclick="downloadResult('${f.result?.job_id}', 'merged')">⬇️ Descargar</button>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        elements.batchResults.classList.remove('hidden');
+    }
+
+    showSection('resultsSection');
+    clearLocalStorage();
+}
+
+// =============================================================================
+// Descarga
+// =============================================================================
+
+function renderDownloadOptions(result) {
+    if (!elements.downloadOptions) return;
+
+    const numParts = result.num_parts || 1;
+
+    if (numParts > 1) {
+        elements.downloadOptions.innerHTML = `
+            <div class="download-header">
+                <h4>📦 Opciones de Descarga</h4>
+                <p class="download-info">Video dividido en ${numParts} partes</p>
+            </div>
+            <div class="download-buttons">
+                <button class="btn-download-main" onclick="downloadResult('${result.job_id}', 'merged')">
+                    <span class="btn-icon">🎬</span>
+                    <span class="btn-text">Todo Junto</span>
+                </button>
+                <button class="btn-download-alt" onclick="downloadResult('${result.job_id}', 'all')">
+                    <span class="btn-icon">📂</span>
+                    <span class="btn-text">ZIP Partes</span>
+                </button>
+            </div>
+            <div class="parts-section">
+                <h5>Partes individuales:</h5>
+                <div class="parts-list">
+                    ${result.parts.map(p => `
+                        <div class="part-item">
+                            <span>Parte ${p.part_num} (${formatDuration(p.new_duration)})</span>
+                            <button onclick="downloadResult('${result.job_id}', 'part', ${p.part_num})">⬇️</button>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    } else {
+        elements.downloadOptions.innerHTML = `
+            <div class="download-buttons single">
+                <button class="btn-download-main" onclick="downloadResult('${result.job_id}', 'merged')">
+                    <span class="btn-icon">⬇️</span>
+                    <span class="btn-text">Descargar Video</span>
+                </button>
+            </div>
+        `;
+    }
+}
+
+function downloadResult(jobId, type, partNum = null) {
+    let url = `/api/download/${jobId}/${type}`;
+    if (type === 'part' && partNum) url = `/api/download/${jobId}/part/${partNum}`;
+    window.location.href = url;
+}
+
+// =============================================================================
+// Resume
+// =============================================================================
+
+function checkForResume() {
+    const saved = loadFromLocalStorage();
+    if (saved && saved.files && saved.files.some(f => f.status === 'pending')) {
+        const pending = saved.files.filter(f => f.status === 'pending').length;
+        const completed = saved.files.filter(f => f.status === 'completed').length;
+
+        if (elements.resumeBanner) {
+            elements.resumeBanner.classList.remove('hidden');
+            if (elements.resumeInfo) {
+                elements.resumeInfo.textContent = `${completed}/${saved.files.length} videos procesados. ¿Continuar?`;
+            }
+        }
+    }
+}
+
+function resumeProcessing() {
+    // TODO: Implementar resume desde localStorage
+    const saved = loadFromLocalStorage();
+    if (saved) {
+        state.batchId = saved.batchId;
+        state.settings = saved.settings;
+        state.results = saved.results || [];
+
+        // Necesitamos que el usuario vuelva a seleccionar los archivos
+        alert('Por favor, vuelve a seleccionar los mismos archivos para continuar el procesamiento.');
+        switchMode('batch');
+    }
+    elements.resumeBanner?.classList.add('hidden');
+}
+
+function dismissResume() {
+    clearLocalStorage();
+    elements.resumeBanner?.classList.add('hidden');
+}
+
+// =============================================================================
+// Error y Reset
+// =============================================================================
+
+function showError(message) {
+    if (elements.errorMessage) elements.errorMessage.textContent = message;
+    showSection('errorSection');
+}
+
+function resetApp() {
+    state.selectedFiles = [];
+    state.results = [];
+    state.batchId = null;
+    state.currentFileIndex = 0;
+    state.isProcessing = false;
+
+    elements.uploadArea?.classList.remove('hidden');
+    elements.filePreview?.classList.add('hidden');
+    elements.batchUploadArea?.classList.remove('hidden');
+    document.querySelector('.batch-files-container')?.classList.add('hidden');
+
+    if (elements.batchFilesList) elements.batchFilesList.innerHTML = '';
+    if (elements.batchResults) elements.batchResults.classList.add('hidden');
+    if (elements.processBtn) elements.processBtn.disabled = true;
+    if (elements.progressBar) elements.progressBar.style.width = '0%';
+
+    showSection(null);
+}
+
+// =============================================================================
+// Event Listeners
+// =============================================================================
+
+// Modo switch
+elements.singleMode?.addEventListener('click', () => switchMode('single'));
+elements.batchMode?.addEventListener('click', () => switchMode('batch'));
+
+// Single upload
+elements.uploadArea?.addEventListener('click', () => elements.videoInput?.click());
+elements.uploadArea?.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    elements.uploadArea.classList.add('drag-over');
+});
+elements.uploadArea?.addEventListener('dragleave', () => elements.uploadArea.classList.remove('drag-over'));
+elements.uploadArea?.addEventListener('drop', (e) => {
+    e.preventDefault();
+    elements.uploadArea.classList.remove('drag-over');
+    if (e.dataTransfer.files.length > 0) {
+        if (state.mode === 'single') {
+            handleSingleFile(e.dataTransfer.files[0]);
+        } else {
+            handleBatchFiles(e.dataTransfer.files);
+        }
+    }
+});
+
+elements.videoInput?.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        if (state.mode === 'single') {
+            handleSingleFile(e.target.files[0]);
+        } else {
+            handleBatchFiles(e.target.files);
+        }
+    }
+});
+
+// Batch upload
+elements.batchUploadArea?.addEventListener('click', () => elements.folderInput?.click());
+elements.folderInput?.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) handleBatchFiles(e.target.files);
+});
+
+// Remove file
+elements.removeFile?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    resetApp();
+});
+
+// Batch selection
+elements.selectAllBtn?.addEventListener('click', () => selectAllFiles(true));
+elements.clearSelectionBtn?.addEventListener('click', () => selectAllFiles(false));
+
+// Settings
+elements.maxSilence?.addEventListener('input', (e) => {
+    state.settings.maxSilence = parseFloat(e.target.value);
+    if (elements.maxSilenceValue) elements.maxSilenceValue.textContent = `${e.target.value}s`;
+});
+
+elements.sensitivity?.addEventListener('input', (e) => {
+    state.settings.sensitivity = parseInt(e.target.value);
+    if (elements.sensitivityValue) elements.sensitivityValue.textContent = e.target.value;
+});
+
+// Process
+elements.processBtn?.addEventListener('click', () => {
+    if (state.mode === 'single') processSingle();
+    else processBatch();
+});
+
+// Retry
+elements.retryBtn?.addEventListener('click', () => {
+    if (state.selectedFiles.length > 0) {
+        if (state.mode === 'single') processSingle();
+        else processBatch();
+    } else {
+        resetApp();
+    }
+});
+
+// New video
+elements.newVideoBtn?.addEventListener('click', () => {
+    state.results.forEach(r => {
+        if (r.job_id) fetch(`/api/cleanup/${r.job_id}`, { method: 'DELETE' }).catch(() => { });
+    });
+    resetApp();
+});
+
+// Resume
+elements.resumeBtn?.addEventListener('click', resumeProcessing);
+elements.dismissResumeBtn?.addEventListener('click', dismissResume);
 
 // =============================================================================
 // Inicialización
 // =============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Verificar que el servidor esté funcionando
-    fetch('/api/health')
-        .then(response => response.json())
-        .then(data => {
-            console.log('✅ Servidor conectado:', data.message);
-        })
-        .catch(error => {
-            console.warn('⚠️ No se pudo conectar con el servidor:', error);
-        });
+    checkForResume();
+    fetch('/api/health').then(r => r.json()).then(() => console.log('✅ Servidor OK'));
 });
 
-console.log('🎬 SilenceCutter cargado correctamente');
+console.log('🎬 SilenceCutter v3 - Batch Processing');
