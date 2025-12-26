@@ -87,6 +87,8 @@ const elements = {
     maxSilenceValue: document.getElementById('maxSilenceValue'),
     sensitivity: document.getElementById('sensitivity'),
     sensitivityValue: document.getElementById('sensitivityValue'),
+    outputFolder: document.getElementById('outputFolder'),
+    browseFolder: document.getElementById('browseFolder'),
 
     // Actions
     processBtn: document.getElementById('processBtn'),
@@ -290,6 +292,12 @@ async function processSingle() {
     formData.append('video', file);
     formData.append('max_silence', state.settings.maxSilence);
     formData.append('sensitivity', state.settings.sensitivity);
+
+    // Carpeta de salida opcional
+    const outputFolder = elements.outputFolder?.value?.trim() || '';
+    if (outputFolder) {
+        formData.append('output_folder', outputFolder);
+    }
 
     let eventSource = null;
     let jobId = null;
@@ -560,8 +568,30 @@ function renderDownloadOptions(result) {
     if (!elements.downloadOptions) return;
 
     const numParts = result.num_parts || 1;
+    const outputFolder = result.output_dir || '';
 
-    if (numParts > 1) {
+    // Verificar si se guardó en carpeta personalizada
+    const savedToCustomFolder = outputFolder && !outputFolder.includes('\\Temp\\') && !outputFolder.includes('/tmp/');
+
+    if (savedToCustomFolder) {
+        // Los archivos ya están en la carpeta del usuario
+        elements.downloadOptions.innerHTML = `
+            <div class="download-header saved-locally">
+                <h4>✅ Archivos guardados</h4>
+                <p class="download-info folder-path">📁 ${outputFolder}</p>
+            </div>
+            <div class="saved-files-list">
+                ${result.parts.map(p => `
+                    <div class="saved-file-item">
+                        <span class="file-icon">🎬</span>
+                        <span class="file-name">${p.filename}</span>
+                        <span class="file-duration">${formatDuration(p.new_duration)}</span>
+                    </div>
+                `).join('')}
+            </div>
+            <p class="saved-note">Los archivos están listos en tu carpeta</p>
+        `;
+    } else if (numParts > 1) {
         elements.downloadOptions.innerHTML = `
             <div class="download-header">
                 <h4>📦 Opciones de Descarga</h4>
@@ -748,6 +778,36 @@ elements.sensitivity?.addEventListener('input', (e) => {
     const db = sensitivityToDb(sens);
     if (elements.sensitivityValue) {
         elements.sensitivityValue.textContent = `${sens} (${db} dB)`;
+    }
+});
+
+// Browse folder - usa File System Access API si está disponible
+elements.browseFolder?.addEventListener('click', async () => {
+    // Verificar si el navegador soporta la API
+    if ('showDirectoryPicker' in window) {
+        try {
+            const dirHandle = await window.showDirectoryPicker({
+                mode: 'readwrite'
+            });
+            // Obtener la ruta (solo funciona en algunos contextos)
+            // Como fallback, usamos el nombre del directorio
+            if (elements.outputFolder) {
+                // La API no da la ruta completa por seguridad
+                // Mostramos el nombre y guardamos el handle
+                elements.outputFolder.value = dirHandle.name;
+                elements.outputFolder.dataset.dirHandle = 'set';
+                // Guardar el handle para uso posterior
+                state.dirHandle = dirHandle;
+                alert(`Carpeta seleccionada: ${dirHandle.name}\n\nNota: Por seguridad del navegador, debes escribir la ruta completa manualmente.\n\nEjemplo: C:\\Users\\Cynthia\\Videos\\${dirHandle.name}`);
+            }
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                console.error('Error seleccionando carpeta:', err);
+            }
+        }
+    } else {
+        // Fallback para navegadores que no soportan la API
+        alert('Tu navegador no soporta el selector de carpetas.\n\nEscribe la ruta manualmente, por ejemplo:\nC:\\Users\\Cynthia\\Videos\\Editados');
     }
 });
 

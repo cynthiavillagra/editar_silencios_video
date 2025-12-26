@@ -141,6 +141,18 @@
                     <input type="range" id="sensitivity" min="1" max="10" step="1" value="5">
                     <p class="setting-description">Bajo = solo silencios obvios | Alto = detecta ruidos bajos</p>
                 </div>
+
+                <div class="setting-group output-folder-group">
+                    <label for="outputFolder">
+                        <span class="setting-label">📁 Carpeta de salida</span>
+                        <span class="setting-value optional">(opcional)</span>
+                    </label>
+                    <div class="folder-input-row">
+                        <input type="text" id="outputFolder" placeholder="Ej: C:\Videos\Editados" class="text-input">
+                        <button type="button" id="browseFolder" class="btn-browse" title="Examinar...">📂</button>
+                    </div>
+                    <p class="setting-description">Si se especifica, los videos se guardan directamente allí</p>
+                </div>
             </section>
 
             <!-- Process Button -->

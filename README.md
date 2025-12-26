@@ -4,7 +4,9 @@
 
 ![Python](https://img.shields.io/badge/Python-3.13+-blue)
 ![Flask](https://img.shields.io/badge/Flask-3.0-green)
-![License](https://img.shields.io/badge/License-MIT-yellow)
+![License](https://img.shields.io/badge/License-CC%20BY%204.0-yellow)
+
+---
 
 ## ✨ Características
 
@@ -32,6 +34,9 @@
 - **Todo junto**: Un solo archivo MP4
 - **Por partes**: Archivos separados (Parte1.mp4, Parte2.mp4...)
 - **ZIP**: Todas las partes comprimidas
+- **Carpeta personalizada**: Guarda directamente donde quieras
+
+---
 
 ## 🚀 Instalación
 
@@ -64,6 +69,8 @@ python app.py
 
 Abrir en el navegador: **http://localhost:5000**
 
+---
+
 ## ⚙️ Configuración
 
 ### Duración Máxima de Silencio
@@ -80,8 +87,21 @@ Abrir en el navegador: **http://localhost:5000**
 | 7 | -45 dB | Grabaciones limpias |
 | 10 | -55 dB | Audio de estudio |
 
-- **Bajo (1-3)**: Solo detecta silencios muy obvios
-- **Alto (7-10)**: Detecta como silencio cualquier ruido muy bajo
+---
+
+## 🛠️ Scripts CLI Auxiliares
+
+### Calcular duración total de videos
+```bash
+python duracion_videos.py "C:\ruta\a\videos"
+```
+
+### Unir múltiples videos
+```bash
+python unir_videos.py "C:\ruta\a\videos"
+```
+
+---
 
 ## 📂 Estructura del Proyecto
 
@@ -89,14 +109,26 @@ Abrir en el navegador: **http://localhost:5000**
 app silencios/
 ├── app.py                 # Backend Flask
 ├── requirements.txt       # Dependencias Python
+├── duracion_videos.py     # Script: calcular duración
+├── unir_videos.py         # Script: unir videos
 ├── templates/
 │   └── index.html         # Página principal
-└── static/
-    ├── css/
-    │   └── styles.css     # Estilos (tema oscuro)
-    └── js/
-        └── app.js         # Lógica del frontend
+├── static/
+│   ├── css/styles.css     # Estilos (tema oscuro)
+│   └── js/app.js          # Lógica del frontend
+└── docs/                  # Documentación técnica
+    ├── 01_planificacion.md
+    ├── 02_analisis.md
+    ├── 03_a_diseno_arquitectura_patrones.md
+    ├── 03_b_modelado_datos.md
+    ├── 03_c_api_dinamica.md
+    ├── 04_manual_app_py.md
+    ├── 05_manual_app_js.md
+    ├── 06_manual_scripts_cli.md
+    └── CHECKPOINT.md
 ```
+
+---
 
 ## 🔧 API Endpoints
 
@@ -104,57 +136,78 @@ app silencios/
 |--------|----------|-------------|
 | GET | `/` | Página principal |
 | GET | `/api/health` | Estado del servidor |
-| POST | `/api/process` | Procesar video (sincrónico) |
-| POST | `/api/process/async` | Procesar video (asíncrono con SSE) |
+| POST | `/api/process/async` | Procesar video (async con SSE) |
 | GET | `/api/progress/<job_id>` | Stream SSE de progreso |
 | GET | `/api/job/<job_id>` | Estado de un trabajo |
 | POST | `/api/batch/start` | Iniciar batch |
-| POST | `/api/batch/<id>/process/<index>` | Procesar archivo de batch |
 | GET | `/api/download/<job_id>/merged` | Descargar video completo |
-| GET | `/api/download/<job_id>/part/<n>` | Descargar parte específica |
-| GET | `/api/download/<job_id>/all` | Descargar ZIP con todas las partes |
-| DELETE | `/api/cleanup/<job_id>` | Limpiar archivos temporales |
-
-## 📋 Formatos Soportados
-
-- MP4
-- AVI
-- MOV
-- MKV
-- WebM
-- WMV
-
-## 🎯 Casos de Uso
-
-1. **Clases grabadas**: Recortar pausas largas del profesor pensando
-2. **Presentaciones**: Eliminar silencios entre diapositivas
-3. **Podcasts**: Acortar pausas incómodas
-4. **Tutoriales**: Hacer videos más dinámicos
-
-## 📝 Notas Técnicas
-
-- Los videos >30 minutos se dividen automáticamente en partes de ~30 min
-- El procesamiento usa MoviePy (basado en FFmpeg)
-- La detección de silencios usa NumPy y SciPy (análisis RMS)
-- Compatible con Python 3.14 (no usa audioop/pydub)
-
-## 🐛 Solución de Problemas
-
-### "FFmpeg no encontrado"
-Instalar FFmpeg y agregarlo al PATH del sistema.
-
-### "Error al procesar video"
-- Verificar que el formato sea soportado
-- Probar con un video más corto para diagnóstico
-
-### El progreso no se actualiza
-- Refrescar la página
-- Verificar que el servidor esté corriendo
-
-## 📄 Licencia
-
-MIT License - Uso libre para proyectos educativos y personales.
+| GET | `/api/download/<job_id>/all` | Descargar ZIP |
 
 ---
 
+## 📋 Formatos Soportados
+
+- MP4, AVI, MOV, MKV, WebM, WMV
+
+---
+
+## 🤖 AI Stack
+
+Este proyecto fue desarrollado con asistencia de inteligencia artificial:
+
+| Herramienta | Versión | Uso |
+|-------------|---------|-----|
+| **Google Antigravity** | Claude 4 | Asistente de desarrollo, arquitectura, documentación |
+
+### ⚠️ Aviso Importante
+
+Este proyecto fue creado con fines **educativos y de prototipado rápido**. 
+
+- ✅ Apto para: uso local, proyectos pedagógicos, MVPs
+- ❌ No apto para: producción sin revisión, sistemas críticos
+
+El código generado por IA ha sido revisado pero puede contener:
+- Vulnerabilidades de seguridad no detectadas
+- Casos edge no contemplados
+- Optimizaciones pendientes
+
+**Úselo bajo su propia responsabilidad.**
+
+---
+
+## 📝 Documentación Técnica
+
+La documentación completa siguiendo la **Guía V10** está disponible en la carpeta `docs/`:
+
+1. **Planificación**: Objetivos, alcance, análisis de riesgos
+2. **Análisis**: Requisitos MoSCoW, historias de usuario, casos de uso
+3. **Arquitectura**: Patrones de diseño, decisiones técnicas
+4. **Modelado**: Diagramas ER y de clases (Mermaid)
+5. **API**: Endpoints, diagramas de secuencia
+6. **Manuales**: Guías técnicas por archivo
+
+---
+
+## 📄 Licencia
+
+Este proyecto está licenciado bajo **Creative Commons Attribution 4.0 International (CC BY 4.0)**.
+
+Puedes:
+- ✅ Compartir — copiar y redistribuir el material
+- ✅ Adaptar — remezclar, transformar y construir sobre el material
+- ✅ Para cualquier propósito, incluso comercial
+
+Con la condición de:
+- 📌 **Atribución** — Debes dar crédito apropiado
+
+Ver [LICENSE](LICENSE) para más detalles.
+
+---
+
+## 🙏 Agradecimientos
+
 Desarrollado con ❤️ para educadores que quieren ahorrar tiempo editando videos.
+
+**Autor**: Cynthia Villagra  
+**Asistencia IA**: Google Antigravity (Claude)  
+**Año**: 2025

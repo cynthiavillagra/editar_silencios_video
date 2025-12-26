@@ -400,11 +400,11 @@ def process_video_endpoint():
         file.save(input_path)
         update_progress(unique_id, 'uploading', 3, '📤 Archivo recibido, iniciando...')
         
-        result = process_single_video(input_path, output_dir, f"editado_{base_name}",
+        result = process_single_video(input_path, output_dir, f"{base_name}_editado",
                                       max_silence, silence_threshold, unique_id)
         result['job_id'] = unique_id
         result['output_dir'] = output_dir
-        result['base_filename'] = f"editado_{base_name}"
+        result['base_filename'] = f"{base_name}_editado"
         results_store[unique_id] = result
         update_progress(unique_id, 'complete', 100, '✅ ¡Listo!')
         return jsonify({'success': True, 'job_id': unique_id, **result})
@@ -433,27 +433,45 @@ def process_video_async_endpoint():
     except:
         return jsonify({'error': 'Parámetros inválidos'}), 400
     
+    # Carpeta de salida personalizada
+    output_folder = request.form.get('output_folder', '').strip()
+    
     silence_threshold = -25 - (sensitivity - 1) * 3.33
     filename = secure_filename(file.filename)
     base_name = filename.rsplit('.', 1)[0]
     job_id = str(uuid.uuid4())
     
     input_path = os.path.join(UPLOAD_FOLDER, f"input_{job_id}_{filename}")
-    output_dir = os.path.join(UPLOAD_FOLDER, f"output_{job_id}")
+    
+    # Determinar carpeta de salida
+    if output_folder and os.path.isdir(output_folder):
+        output_dir = output_folder
+        save_to_custom = True
+    elif output_folder:
+        # Intentar crear la carpeta si no existe
+        try:
+            os.makedirs(output_folder, exist_ok=True)
+            output_dir = output_folder
+            save_to_custom = True
+        except Exception as e:
+            return jsonify({'error': f'No se puede crear la carpeta: {str(e)}'}), 400
+    else:
+        output_dir = os.path.join(UPLOAD_FOLDER, f"output_{job_id}")
+        save_to_custom = False
     
     file.save(input_path)
     
-    jobs_store[job_id] = {'status': 'processing'}
+    jobs_store[job_id] = {'status': 'processing', 'save_to_custom': save_to_custom, 'output_folder': output_dir}
     update_progress(job_id, 'uploading', 2, '📤 Archivo recibido, iniciando procesamiento...')
     
     # Iniciar procesamiento en hilo separado
     thread = threading.Thread(
         target=process_video_async,
-        args=(job_id, input_path, output_dir, f"editado_{base_name}", max_silence, silence_threshold)
+        args=(job_id, input_path, output_dir, f"{base_name}_editado", max_silence, silence_threshold)
     )
     thread.start()
     
-    return jsonify({'success': True, 'job_id': job_id, 'status': 'processing'})
+    return jsonify({'success': True, 'job_id': job_id, 'status': 'processing', 'output_folder': output_dir if save_to_custom else None})
 
 
 @app.route('/api/job/<job_id>')
