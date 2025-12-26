@@ -1,111 +1,160 @@
-# ✂️ SilenceCutter - Recorte Automático de Silencios en Videos
+# ✂️ SilenceCutter v3
 
-Aplicación web local para recortar automáticamente pausas y silencios largos de tus videos. Perfecta para editar grabaciones de clases, presentaciones y tutoriales.
+**Recorta automáticamente silencios largos en videos** - Perfecto para editar clases grabadas, presentaciones y podcasts.
 
-## 🚀 Características
+![Python](https://img.shields.io/badge/Python-3.13+-blue)
+![Flask](https://img.shields.io/badge/Flask-3.0-green)
+![License](https://img.shields.io/badge/License-MIT-yellow)
 
-- **Detección automática de silencios** usando análisis de audio
-- **Configurable**: ajusta la duración máxima de silencio (0.5s - 10s)
-- **Sensibilidad ajustable**: controla qué tan "silencioso" debe ser el audio para considerarse pausa
-- **Procesamiento 100% local**: tus videos nunca salen de tu computadora
-- **Interfaz moderna y fácil de usar**
-- **Soporta múltiples formatos**: MP4, AVI, MOV, MKV, WebM
+## ✨ Características
 
-## 📋 Requisitos Previos
+### 🎬 Procesamiento Inteligente
+- **Recorte de silencios**: Los silencios mayores al umbral se **acortan** (no se borran completamente)
+- **División automática**: Videos >30 min se dividen en partes para mejor manejo de memoria
+- **Preserva pausas naturales**: Mantiene transiciones suaves entre segmentos
 
-1. **Python 3.8+** instalado
-2. **FFmpeg** instalado en el sistema
+### 📁 Procesamiento por Lotes
+- Procesa **múltiples videos** de una carpeta
+- Selecciona archivos individuales o carpetas completas
+- **Checkboxes** para elegir qué videos procesar
+- Cola de procesamiento uno a uno
 
-### Instalar FFmpeg en Windows
+### 💾 Guardado de Estado
+- **Resume automático**: Si el proceso se interrumpe, puedes continuar donde quedaste
+- Estado guardado en localStorage (navegador) y JSON (servidor)
 
-Opción 1 - Usando Chocolatey:
+### 📊 Progreso en Tiempo Real
+- Barra de progreso con porcentaje
+- Muestra en qué **parte** del video está (ej: "Parte 2/4")
+- Etapas visibles: Subir → Audio → Analizar → Cortar → Renderizar
+
+### 📥 Opciones de Descarga Flexibles
+- **Todo junto**: Un solo archivo MP4
+- **Por partes**: Archivos separados (Parte1.mp4, Parte2.mp4...)
+- **ZIP**: Todas las partes comprimidas
+
+## 🚀 Instalación
+
+### Requisitos
+- Python 3.13+
+- FFmpeg (debe estar en el PATH del sistema)
+
+### Pasos
+
 ```bash
-choco install ffmpeg
-```
+# Clonar repositorio
+git clone https://github.com/cynthiavillagra/editar_silencios_video.git
+cd editar_silencios_video
 
-Opción 2 - Descarga manual:
-1. Descarga desde [ffmpeg.org](https://ffmpeg.org/download.html)
-2. Extrae y añade la carpeta `bin` al PATH del sistema
-
-## 🔧 Instalación
-
-1. **Crear entorno virtual** (recomendado):
-```bash
+# Crear entorno virtual
 python -m venv venv
-venv\Scripts\activate  # En Windows
-# o
-source venv/bin/activate  # En Linux/Mac
-```
 
-2. **Instalar dependencias**:
-```bash
+# Activar entorno (Windows)
+venv\Scripts\activate
+
+# Activar entorno (Linux/Mac)
+source venv/bin/activate
+
+# Instalar dependencias
 pip install -r requirements.txt
-```
 
-## ▶️ Uso
-
-1. **Iniciar la aplicación**:
-```bash
+# Ejecutar
 python app.py
 ```
 
-2. **Abrir en el navegador**:
-   - Ve a `http://localhost:5000`
-
-3. **Procesar un video**:
-   - Arrastra o selecciona tu video
-   - Ajusta la duración máxima de silencio (por defecto: 3 segundos)
-   - Ajusta la sensibilidad de detección
-   - Haz clic en "Procesar Video"
-   - Descarga el resultado
+Abrir en el navegador: **http://localhost:5000**
 
 ## ⚙️ Configuración
 
 ### Duración Máxima de Silencio
-- **Rango**: 0.5 - 10 segundos
-- **Recomendado**: 2-3 segundos para clases grabadas
-- Los silencios mayores a este valor serán recortados
+- **Rango**: 0.5s - 10s
+- **Por defecto**: 3s
+- Los silencios mayores a este valor se **recortan** a esta duración
 
-### Sensibilidad
-- **Rango**: 1 - 10
-- **1**: Menos sensible, solo detecta silencios muy claros
-- **10**: Muy sensible, detecta incluso susurros como silencio
-- **Recomendado**: 5-6 para la mayoría de grabaciones
+### Sensibilidad de Detección
+| Valor | Decibeles | Uso Recomendado |
+|:-----:|:---------:|-----------------|
+| 1 | -25 dB | Grabaciones con mucho ruido de fondo |
+| 3 | -32 dB | Aulas ruidosas |
+| **5** | **-38 dB** | **Balance general (por defecto)** |
+| 7 | -45 dB | Grabaciones limpias |
+| 10 | -55 dB | Audio de estudio |
 
-## 📁 Estructura del Proyecto
+- **Bajo (1-3)**: Solo detecta silencios muy obvios
+- **Alto (7-10)**: Detecta como silencio cualquier ruido muy bajo
+
+## 📂 Estructura del Proyecto
 
 ```
 app silencios/
-├── app.py              # Backend Flask
-├── requirements.txt    # Dependencias Python
-├── README.md           # Esta documentación
+├── app.py                 # Backend Flask
+├── requirements.txt       # Dependencias Python
 ├── templates/
-│   └── index.html      # Página principal
+│   └── index.html         # Página principal
 └── static/
     ├── css/
-    │   └── styles.css  # Estilos
+    │   └── styles.css     # Estilos (tema oscuro)
     └── js/
-        └── app.js      # JavaScript frontend
+        └── app.js         # Lógica del frontend
 ```
 
-## 🔧 Solución de Problemas
+## 🔧 API Endpoints
 
-### Error: "FFmpeg not found"
-Asegúrate de que FFmpeg esté instalado y en el PATH del sistema.
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET | `/` | Página principal |
+| GET | `/api/health` | Estado del servidor |
+| POST | `/api/process` | Procesar video (sincrónico) |
+| POST | `/api/process/async` | Procesar video (asíncrono con SSE) |
+| GET | `/api/progress/<job_id>` | Stream SSE de progreso |
+| GET | `/api/job/<job_id>` | Estado de un trabajo |
+| POST | `/api/batch/start` | Iniciar batch |
+| POST | `/api/batch/<id>/process/<index>` | Procesar archivo de batch |
+| GET | `/api/download/<job_id>/merged` | Descargar video completo |
+| GET | `/api/download/<job_id>/part/<n>` | Descargar parte específica |
+| GET | `/api/download/<job_id>/all` | Descargar ZIP con todas las partes |
+| DELETE | `/api/cleanup/<job_id>` | Limpiar archivos temporales |
 
-### El video no se procesa
-- Verifica que el formato sea compatible
-- Asegúrate de que el video tenga audio
-- Revisa que el archivo no esté corrupto
+## 📋 Formatos Soportados
 
-### El procesamiento es muy lento
-- Los videos largos pueden tomar varios minutos
-- Considera reducir la resolución del video original
+- MP4
+- AVI
+- MOV
+- MKV
+- WebM
+- WMV
 
-## 📝 Licencia
+## 🎯 Casos de Uso
 
-Este proyecto es de uso libre para fines educativos.
+1. **Clases grabadas**: Recortar pausas largas del profesor pensando
+2. **Presentaciones**: Eliminar silencios entre diapositivas
+3. **Podcasts**: Acortar pausas incómodas
+4. **Tutoriales**: Hacer videos más dinámicos
+
+## 📝 Notas Técnicas
+
+- Los videos >30 minutos se dividen automáticamente en partes de ~30 min
+- El procesamiento usa MoviePy (basado en FFmpeg)
+- La detección de silencios usa NumPy y SciPy (análisis RMS)
+- Compatible con Python 3.14 (no usa audioop/pydub)
+
+## 🐛 Solución de Problemas
+
+### "FFmpeg no encontrado"
+Instalar FFmpeg y agregarlo al PATH del sistema.
+
+### "Error al procesar video"
+- Verificar que el formato sea soportado
+- Probar con un video más corto para diagnóstico
+
+### El progreso no se actualiza
+- Refrescar la página
+- Verificar que el servidor esté corriendo
+
+## 📄 Licencia
+
+MIT License - Uso libre para proyectos educativos y personales.
 
 ---
 
-Desarrollado con ❤️ para hacer la edición de videos más fácil
+Desarrollado con ❤️ para educadores que quieren ahorrar tiempo editando videos.

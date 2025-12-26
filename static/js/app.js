@@ -284,29 +284,123 @@ async function processSingle() {
     state.isProcessing = true;
     showSection('progressSection');
     elements.processBtn.disabled = true;
-    updateProgressBar(0, '📤 Subiendo...', 'uploading');
+    updateProgressBar(0, '📤 Subiendo video...', 'uploading');
 
     const formData = new FormData();
     formData.append('video', file);
     formData.append('max_silence', state.settings.maxSilence);
     formData.append('sensitivity', state.settings.sensitivity);
 
+    let eventSource = null;
+    let jobId = null;
+    let completed = false;
+
     try {
-        const response = await fetch('/api/process', {
+        // 1. Enviar archivo y recibir job_id
+        updateProgressBar(2, '📤 Enviando video al servidor...', 'uploading');
+
+        const startResponse = await fetch('/api/process/async', {
             method: 'POST',
             body: formData
         });
 
-        const result = await response.json();
+        const startResult = await startResponse.json();
 
-        if (response.ok && result.success) {
-            state.results = [result];
-            showSingleResult(result);
-        } else {
-            showError(result.error || 'Error desconocido');
+        if (!startResponse.ok || !startResult.success) {
+            showError(startResult.error || 'Error al iniciar procesamiento');
+            return;
         }
+
+        jobId = startResult.job_id;
+
+        // 2. Conectar SSE para escuchar progreso en tiempo real
+        updateProgressBar(5, '🔗 Conectando para ver progreso...', 'uploading');
+
+        eventSource = new EventSource(`/api/progress/${jobId}`);
+
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+
+                // Actualizar barra de progreso
+                updateProgressBar(data.percent, data.message, data.stage);
+
+                // Actualizar título con info de partes
+                if (data.part && data.total_parts && data.total_parts > 1 && elements.progressTitle) {
+                    elements.progressTitle.textContent = `⚙️ Parte ${data.part}/${data.total_parts}`;
+                } else if (elements.progressTitle) {
+                    const titles = {
+                        'uploading': '📤 Subiendo',
+                        'loading': '📂 Cargando',
+                        'extracting': '🎵 Extrayendo audio',
+                        'analyzing': '🔍 Analizando',
+                        'cutting': '✂️ Recortando',
+                        'rendering': '🎬 Renderizando',
+                        'processing': '⚙️ Procesando',
+                        'complete': '✅ Completado',
+                        'error': '❌ Error'
+                    };
+                    elements.progressTitle.textContent = titles[data.stage] || 'Procesando...';
+                }
+
+                // Si completó o error, cerrar SSE
+                if (data.stage === 'complete') {
+                    completed = true;
+                    eventSource.close();
+                    // Obtener resultado final
+                    fetchJobResult(jobId);
+                } else if (data.stage === 'error') {
+                    eventSource.close();
+                    showError(data.message);
+                }
+            } catch (e) {
+                console.error('Error parsing SSE:', e);
+            }
+        };
+
+        eventSource.onerror = () => {
+            if (!completed) {
+                // Puede ser que el servidor terminó, verificar estado
+                setTimeout(() => fetchJobResult(jobId), 1000);
+            }
+            eventSource.close();
+        };
+
     } catch (error) {
         showError(`Error: ${error.message}`);
+        state.isProcessing = false;
+        elements.processBtn.disabled = false;
+        if (eventSource) eventSource.close();
+    }
+}
+
+/**
+ * Obtiene el resultado de un job completo
+ */
+async function fetchJobResult(jobId) {
+    try {
+        const response = await fetch(`/api/job/${jobId}`);
+        const data = await response.json();
+
+        if (data.status === 'completed' && data.result) {
+            state.results = [data.result];
+
+            if (data.result.num_parts > 1 && elements.progressTitle) {
+                elements.progressTitle.textContent = `✅ Procesado en ${data.result.num_parts} partes`;
+            }
+
+            await new Promise(r => setTimeout(r, 500));
+            showSingleResult(data.result);
+        } else if (data.status === 'error') {
+            showError(data.error || 'Error en procesamiento');
+        } else if (data.status === 'processing') {
+            // Todavía procesando, esperar y reintentar
+            setTimeout(() => fetchJobResult(jobId), 2000);
+        } else {
+            showError('Estado desconocido');
+        }
+    } catch (error) {
+        showError(`Error obteniendo resultado: ${error.message}`);
     } finally {
         state.isProcessing = false;
         elements.processBtn.disabled = false;
@@ -640,9 +734,21 @@ elements.maxSilence?.addEventListener('input', (e) => {
     if (elements.maxSilenceValue) elements.maxSilenceValue.textContent = `${e.target.value}s`;
 });
 
+/**
+ * Calcula los decibeles según la sensibilidad
+ * Fórmula: -25 - (sensitivity - 1) * 3.33
+ */
+function sensitivityToDb(sensitivity) {
+    return Math.round(-25 - (sensitivity - 1) * 3.33);
+}
+
 elements.sensitivity?.addEventListener('input', (e) => {
-    state.settings.sensitivity = parseInt(e.target.value);
-    if (elements.sensitivityValue) elements.sensitivityValue.textContent = e.target.value;
+    const sens = parseInt(e.target.value);
+    state.settings.sensitivity = sens;
+    const db = sensitivityToDb(sens);
+    if (elements.sensitivityValue) {
+        elements.sensitivityValue.textContent = `${sens} (${db} dB)`;
+    }
 });
 
 // Process

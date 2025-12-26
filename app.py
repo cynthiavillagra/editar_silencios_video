@@ -4,6 +4,7 @@ App de Recorte de Silencios en Videos v3
 - División inteligente para videos largos
 - Procesamiento por lotes (batch)
 - Guardado de estado para resumir
+- Progreso en tiempo real con SSE
 
 Compatible con Python 3.13+
 """
@@ -14,6 +15,7 @@ import tempfile
 import json
 import time
 import shutil
+import threading
 import numpy as np
 from pathlib import Path
 from scipy.io import wavfile
@@ -39,6 +41,7 @@ app.config['MAX_CONTENT_LENGTH'] = None
 progress_store = {}
 results_store = {}
 batch_store = {}
+jobs_store = {}  # Para trabajos asíncronos
 
 
 def allowed_file(filename):
@@ -162,30 +165,52 @@ def process_single_video(input_path, output_dir, base_filename, max_silence, sil
         
         output_path = os.path.join(output_dir, part_filename)
         
+        # Calcular progreso para esta parte
+        part_base = 10 + (part_num - 1) / num_parts * 85
+        
         if job_id:
-            base_pct = int(10 + (part_num - 1) / num_parts * 80)
-            update_progress(job_id, 'processing', base_pct, 
-                          f'⚙️ Parte {part_num}/{num_parts}', part=part_num, total_parts=num_parts)
+            update_progress(job_id, 'processing', int(part_base), 
+                          f'⚙️ Procesando parte {part_num}/{num_parts}', 
+                          part=part_num, total_parts=num_parts)
         
         # Procesar chunk
         chunk = video.subclip(start_time, min(end_time, video.duration))
         chunk_duration = chunk.duration
         
         if chunk.audio is None:
+            if job_id:
+                update_progress(job_id, 'rendering', int(part_base + 10), 
+                              f'🎬 Renderizando parte {part_num}/{num_parts}...',
+                              part=part_num, total_parts=num_parts)
             chunk.write_videofile(output_path, codec='libx264', audio_codec='aac',
                                  verbose=False, logger=None)
             new_duration = chunk_duration
         else:
             # Extraer audio
+            if job_id:
+                update_progress(job_id, 'extracting', int(part_base + 5),
+                              f'🎵 Extrayendo audio parte {part_num}/{num_parts}...',
+                              part=part_num, total_parts=num_parts)
+            
             temp_audio = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.wav")
             chunk.audio.write_audiofile(temp_audio, fps=22050, verbose=False, logger=None)
             
             # Detectar silencios
+            if job_id:
+                update_progress(job_id, 'analyzing', int(part_base + 10),
+                              f'🔍 Analizando silencios parte {part_num}/{num_parts}...',
+                              part=part_num, total_parts=num_parts)
+            
             segments = detect_silent_segments_numpy(temp_audio, silence_threshold)
             
             if os.path.exists(temp_audio):
                 try: os.remove(temp_audio)
                 except: pass
+            
+            if job_id:
+                update_progress(job_id, 'cutting', int(part_base + 15),
+                              f'✂️ Recortando silencios parte {part_num}/{num_parts}...',
+                              part=part_num, total_parts=num_parts)
             
             if not segments:
                 chunk.write_videofile(output_path, codec='libx264', audio_codec='aac',
@@ -198,23 +223,47 @@ def process_single_video(input_path, output_dir, base_filename, max_silence, sil
                 
                 for i, (s, e) in enumerate(segments):
                     if i == 0:
+                        # Primer segmento: incluir desde el inicio si hay audio antes
                         seg_start = max(0, s - buffer)
+                        seg_end = min(chunk.duration, e + buffer)
+                        processed.append((seg_start, seg_end))
                     else:
+                        # Segmentos siguientes: calcular gap con el anterior
                         prev_end = segments[i-1][1]
-                        gap = s - prev_end
+                        gap = s - prev_end  # Duración del silencio entre segmentos
+                        
                         if gap > max_silence:
-                            seg_start = processed[-1][1] + max_silence if processed else s - buffer
-                            seg_start = max(seg_start, s - buffer)
-                        else:
+                            # Silencio largo: recortar a max_silence
+                            # Mantener max_silence/2 al final del anterior y max_silence/2 al inicio del actual
+                            silence_to_keep = max_silence
+                            
+                            # Ajustar el segmento anterior para incluir parte del silencio
                             if processed:
-                                processed[-1] = (processed[-1][0], min(chunk.duration, e + buffer))
+                                prev_seg = processed[-1]
+                                # Extender el final del segmento anterior con la mitad del silencio permitido
+                                new_prev_end = min(prev_end + silence_to_keep/2, chunk.duration)
+                                processed[-1] = (prev_seg[0], new_prev_end)
+                            
+                            # El nuevo segmento empieza con la mitad del silencio antes del audio
+                            seg_start = max(s - silence_to_keep/2, 0)
+                        else:
+                            # Silencio corto: mantener completo, extender segmento anterior
+                            if processed:
+                                prev_seg = processed[-1]
+                                # Extender el segmento anterior hasta cubrir este también
+                                processed[-1] = (prev_seg[0], min(chunk.duration, e + buffer))
                                 continue
                             else:
                                 seg_start = max(0, s - buffer)
-                    
-                    seg_end = min(chunk.duration, e + buffer)
-                    if seg_end > seg_start + 0.1:
-                        processed.append((seg_start, seg_end))
+                        
+                        seg_end = min(chunk.duration, e + buffer)
+                        if seg_end > seg_start + 0.1:
+                            processed.append((seg_start, seg_end))
+                
+                if job_id:
+                    update_progress(job_id, 'rendering', int(part_base + 20),
+                                  f'🎬 Renderizando parte {part_num}/{num_parts}...',
+                                  part=part_num, total_parts=num_parts)
                 
                 if processed:
                     clips = []
@@ -251,6 +300,11 @@ def process_single_video(input_path, output_dir, base_filename, max_silence, sil
         
         total_original += chunk_duration
         total_new += new_duration
+        
+        if job_id:
+            update_progress(job_id, 'processing', int(part_base + 25),
+                          f'✅ Parte {part_num}/{num_parts} completada',
+                          part=part_num, total_parts=num_parts)
     
     video.close()
     
@@ -262,6 +316,26 @@ def process_single_video(input_path, output_dir, base_filename, max_silence, sil
         'total_time_saved': round(total_original - total_new, 2),
         'percentage_saved': round((1 - total_new/total_original) * 100, 1) if total_original > 0 else 0
     }
+
+
+def process_video_async(job_id, input_path, output_dir, base_filename, max_silence, silence_threshold):
+    """Procesa video en un hilo separado."""
+    try:
+        result = process_single_video(input_path, output_dir, base_filename,
+                                      max_silence, silence_threshold, job_id)
+        result['job_id'] = job_id
+        result['output_dir'] = output_dir
+        result['base_filename'] = base_filename
+        results_store[job_id] = result
+        jobs_store[job_id] = {'status': 'completed', 'result': result}
+        update_progress(job_id, 'complete', 100, '✅ ¡Procesamiento completado!')
+    except Exception as e:
+        jobs_store[job_id] = {'status': 'error', 'error': str(e)}
+        update_progress(job_id, 'error', 0, f'❌ Error: {str(e)}')
+    finally:
+        if os.path.exists(input_path):
+            try: os.remove(input_path)
+            except: pass
 
 
 @app.route('/')
@@ -276,19 +350,29 @@ def health():
 
 @app.route('/api/progress/<job_id>')
 def get_progress(job_id):
+    """SSE endpoint para progreso en tiempo real."""
     def generate():
-        while True:
+        last_data = None
+        timeout = 600  # 10 minutos max
+        start = time.time()
+        
+        while time.time() - start < timeout:
             if job_id in progress_store:
-                yield f"data: {json.dumps(progress_store[job_id])}\n\n"
-                if progress_store[job_id].get('stage') in ['complete', 'error']:
+                data = progress_store[job_id]
+                if data != last_data:
+                    last_data = data.copy()
+                    yield f"data: {json.dumps(data)}\n\n"
+                if data.get('stage') in ['complete', 'error']:
                     break
             time.sleep(0.3)
-    return Response(generate(), mimetype='text/event-stream')
+    
+    return Response(generate(), mimetype='text/event-stream',
+                   headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
 
 @app.route('/api/process', methods=['POST'])
 def process_video_endpoint():
-    """Procesa un único video."""
+    """Procesa un único video (sincrónico para compatibilidad)."""
     if 'video' not in request.files:
         return jsonify({'error': 'No se envió archivo'}), 400
     
@@ -310,10 +394,12 @@ def process_video_endpoint():
     input_path = os.path.join(UPLOAD_FOLDER, f"input_{unique_id}_{filename}")
     output_dir = os.path.join(UPLOAD_FOLDER, f"output_{unique_id}")
     
-    update_progress(unique_id, 'uploading', 0, '📤 Recibiendo...')
+    update_progress(unique_id, 'uploading', 0, '📤 Recibiendo archivo...')
     
     try:
         file.save(input_path)
+        update_progress(unique_id, 'uploading', 3, '📤 Archivo recibido, iniciando...')
+        
         result = process_single_video(input_path, output_dir, f"editado_{base_name}",
                                       max_silence, silence_threshold, unique_id)
         result['job_id'] = unique_id
@@ -329,6 +415,60 @@ def process_video_endpoint():
         if os.path.exists(input_path):
             try: os.remove(input_path)
             except: pass
+
+
+@app.route('/api/process/async', methods=['POST'])
+def process_video_async_endpoint():
+    """Inicia procesamiento asíncrono de video."""
+    if 'video' not in request.files:
+        return jsonify({'error': 'No se envió archivo'}), 400
+    
+    file = request.files['video']
+    if not file.filename or not allowed_file(file.filename):
+        return jsonify({'error': 'Archivo no válido'}), 400
+    
+    try:
+        max_silence = float(request.form.get('max_silence', 3.0))
+        sensitivity = int(request.form.get('sensitivity', 5))
+    except:
+        return jsonify({'error': 'Parámetros inválidos'}), 400
+    
+    silence_threshold = -25 - (sensitivity - 1) * 3.33
+    filename = secure_filename(file.filename)
+    base_name = filename.rsplit('.', 1)[0]
+    job_id = str(uuid.uuid4())
+    
+    input_path = os.path.join(UPLOAD_FOLDER, f"input_{job_id}_{filename}")
+    output_dir = os.path.join(UPLOAD_FOLDER, f"output_{job_id}")
+    
+    file.save(input_path)
+    
+    jobs_store[job_id] = {'status': 'processing'}
+    update_progress(job_id, 'uploading', 2, '📤 Archivo recibido, iniciando procesamiento...')
+    
+    # Iniciar procesamiento en hilo separado
+    thread = threading.Thread(
+        target=process_video_async,
+        args=(job_id, input_path, output_dir, f"editado_{base_name}", max_silence, silence_threshold)
+    )
+    thread.start()
+    
+    return jsonify({'success': True, 'job_id': job_id, 'status': 'processing'})
+
+
+@app.route('/api/job/<job_id>')
+def get_job_status(job_id):
+    """Obtiene el estado de un trabajo asíncrono."""
+    if job_id in jobs_store:
+        job = jobs_store[job_id]
+        if job['status'] == 'completed':
+            return jsonify({'status': 'completed', 'result': job['result']})
+        elif job['status'] == 'error':
+            return jsonify({'status': 'error', 'error': job.get('error', 'Unknown error')})
+        else:
+            progress = progress_store.get(job_id, {})
+            return jsonify({'status': 'processing', 'progress': progress})
+    return jsonify({'error': 'Job no encontrado'}), 404
 
 
 @app.route('/api/batch/start', methods=['POST'])
